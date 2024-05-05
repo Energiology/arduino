@@ -135,6 +135,15 @@ void measurePowerAllPort() {
 }
 
 /**
+ * 연결된 qc와 pd를 초기화
+*/
+void initialize_qc_pd() {
+  for(int i = 0; i < 5; i++) {
+    switchPD(i, PD2); // PD2로 연결 초기화
+  }
+}
+
+/**
  * QC와 연결된 PD를 변경해주는 함수
  * @param QC {int} - PD를 변경할 타겟 QC
  * @param PD {int} - 변경할 타겟 PD ex) PD1, PD2
