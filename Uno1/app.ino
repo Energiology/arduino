@@ -67,9 +67,9 @@ int qc_pd[5] = {PD_2, PD_2, PD_2, PD_2, PD_2};
 
 const int CURRENCY_MEASURE_LENGTH = 3;
 Adafruit_INA219 ina219_QC[3] = {
-  Adafruit_INA219(),
+  Adafruit_INA219(0x44),
   Adafruit_INA219(0x41),
-  Adafruit_INA219(0x44)
+  Adafruit_INA219(0x40)
 };
 
 void setup() {
