@@ -1,68 +1,97 @@
-#include <Wire.h>
-#include <Adafruit_INA219.h>
-#include <ArduinoJson.h>
-
-#define ARDUINO_ID 1
-#define TIMEOUT 1000
-
-// Relay
-#define RY1 2
-#define RY2 3
-#define RY3 4
-#define RY4 5
-#define RY5 6
-#define RY6 7
-#define RY7 8
-#define RY8 9
-#define RY9 10
-#define RY10 11
-
-// Port
-#define QC1 0; // QC1 - RY1, RY2
-#define QC2 1; // QC2 - RY3, RY4
-#define QC3 2; // QC3 - RY5, RY6
-#define QC4 3; // QC4 - RY7, RY8
-#define QC5 4; // QC5 - RY9, RY10
-
-// Power Delivery
-#define PD1 100
-#define PD2 200
-#define PD_OFF 300
-
 /**
  * Relay 번호 홀수는 HIGH일 시 연결, 짝수는 LOW일 시 연결
  * qc_relay[QC][0] -> HIGH = 연결 / LOW = 해제
  * qc_relay[QC][1] -> HIGH = 해제 / LOW = 연결
  * 
- * 즉, QC1의 PD를 PD2 -> PD1으로 바꾸고 싶다면
+ * 즉, QC1의 PD를 PD_2 -> PD_1으로 바꾸고 싶다면
  * qc_relay[QC1][1] -> HIGH = 해제
  * qc_relay[QC1][0] -> HIGH = 연결
 */
 
-int relay[11] = {0, RY1, RY2, RY3, RY4, RY5, RY6, RY7, RY8, RY9, RY10};
-int qc_relay[5][2] = {{RY1, RY2}, {RY3, RY4}, {RY5, RY6}, {RY7, RY8}, {RY9, RY10}}; // qc와 연결된 릴레이, qc_relay[QC번호][0 혹은 1] = 연결된 릴레이
+#include <Wire.h>
+#include <Adafruit_INA219.h>
+#include <ArduinoJson.h>
+
+const int ARDUINO_ID = 1;
+const int TIMEOUT = 1000;
+
+// Relay
+const int RY1 = 2;
+const int RY2 = 3;
+const int RY3 = 4;
+const int RY4 = 5;
+const int RY5 = 6;
+const int RY6 = 7;
+const int RY7 = 8;
+const int RY8 = 9;
+const int RY9 = 10;
+const int RY10 = 11;
+
+// Port
+const int QC1 = 0; // QC1 - RY1, RY2
+const int QC2 = 1; // QC2 - RY3, RY4
+const int QC3 = 2; // QC3 - RY5, RY6
+const int QC4 = 3; // QC4 - RY7, RY8
+const int QC5 = 4; // QC5 - RY9, RY10
+
+// Power Delivery
+const int PD_1 = 0;
+const int PD_2 = 1;
+const int PD_OFF = 2;
+
+const char COMMAND_QC1_PD1 = 'a';
+const char COMMAND_QC1_PD2 = 'b';
+const char COMMAND_QC1_OFF = 'c';
+
+const char COMMAND_QC2_PD1 = 'd';
+const char COMMAND_QC2_PD2 = 'e';
+const char COMMAND_QC2_OFF = 'f';
+
+const char COMMAND_QC3_PD1 = 'g';
+const char COMMAND_QC3_PD2 = 'h';
+const char COMMAND_QC3_OFF = 'i';
+
+const char COMMAND_QC4_PD1 = 'j';
+const char COMMAND_QC4_PD2 = 'k';
+const char COMMAND_QC4_OFF = 'l';
+
+const char COMMAND_QC5_PD1 = 'm';
+const char COMMAND_QC5_PD2 = 'n';
+const char COMMAND_QC5_OFF = 'o';
+
+const int relay[11] = {-1, RY1, RY2, RY3, RY4, RY5, RY6, RY7, RY8, RY9, RY10};
+const int qc_relay[5][2] = {{RY1, RY2}, {RY3, RY4}, {RY5, RY6}, {RY7, RY8}, {RY9, RY10}}; // qc와 연결된 릴레이, qc_relay[QC번호][0 혹은 1] = 연결된 릴레이
 
 // 현재 qc와 연결된 pd 목록, qc_pd[QC번호] = 현재 연결된 QC
-int qc_pd[5] = {PD2, PD2, PD2, PD2, PD2}; 
+int qc_pd[5] = {PD_2, PD_2, PD_2, PD_2, PD_2}; 
 
-Adafruit_INA219 ina219_QC1;
-Adafruit_INA219 ina219_QC2(0x41);
-
+const int CURRENCY_MEASURE_LENGTH = 3;
+Adafruit_INA219 ina219_QC[3] = {
+  Adafruit_INA219(),
+  Adafruit_INA219(0x41),
+  Adafruit_INA219(0x44)
+};
 
 void setup() {
   Serial.begin(9600);
-  uint32_t currentFrequency;
-  ina219_QC1.begin();
-  ina219_QC2.begin();
+
+  // ina219 설정
+  for (int i = 0; i< CURRENCY_MEASURE_LENGTH; i++) {
+    ina219_QC[i].begin();
+  }
+  delay(1000);
 
   // 각 릴레이 pinMode 초기화
   for (int i = 1; i < 11; i++) {
     pinMode(relay[i], OUTPUT);
   }
+  delay(1000);
+
+  // 연결된 PD 초기화
+  initializePD();
 }
 
 void loop() {
-
   // 명령 있을 시 수행
   if (Serial.available()) {
     // String input = Serial.readString();
@@ -70,103 +99,139 @@ void loop() {
     Serial.print("Serial input: ");
     Serial.println(input);
 
-    
-    Serial.flush(); // 버퍼 비우기
+    switch (input) {
+      case COMMAND_QC1_PD1:
+        switchPD(QC1, PD_1);
+        break;
+      case COMMAND_QC1_PD2:
+        switchPD(QC1, PD_2);
+        break;
+      case COMMAND_QC1_OFF:
+        turnOffPD(QC1);
+        break;
+
+      case COMMAND_QC2_PD1:
+        switchPD(QC2, PD_1);
+        break;
+      case COMMAND_QC2_PD2:
+        switchPD(QC2, PD_2);
+        break;
+      case COMMAND_QC2_OFF:
+        turnOffPD(QC2);
+        break;
+
+      case COMMAND_QC3_PD1:
+        switchPD(QC3, PD_1);
+        break;
+      case COMMAND_QC3_PD2:
+        switchPD(QC3, PD_2);
+        break;
+      case COMMAND_QC3_OFF:
+        turnOffPD(QC3);
+        break;
+
+      case COMMAND_QC4_PD1:
+        switchPD(QC4, PD_1);
+        break;
+      case COMMAND_QC4_PD2:
+        switchPD(QC4, PD_2);
+        break;
+      case COMMAND_QC4_OFF:
+        turnOffPD(QC4);
+        break;
+
+      case COMMAND_QC5_PD1:
+        switchPD(QC5, PD_1);
+        break;
+      case COMMAND_QC5_PD2:
+        switchPD(QC5, PD_2);
+        break;
+      case COMMAND_QC5_OFF:
+        turnOffPD(QC5);
+        break;
+
+      default:
+        break;
+    }
+
+    while (Serial.available()) {
+      Serial.flush(); // 버퍼 비우기
+    }
   } 
   
   // 전류 측정
   measurePowerAllPort();
-  // testOutput(); // 테스트 코드
+
   delay(TIMEOUT);
 }
 
-void testOutput() {
-  Serial.println("Every second execute!");
+
+/**
+ * 전체 포트에 연결된 전력 측정
+*/
+void measurePowerAllPort() {
+  for (int qc = 0; qc < CURRENCY_MEASURE_LENGTH; qc++) {
+    measurePower(qc);
+  }
 }
 
-void measurePowerAllPort() {
-  float shuntvoltage_A = 0;
-  float busvoltage_A = 0;
-  float current_mA_A = 0;
-  float loadvoltage_A = 0;
-  float power_mW_A = 0;
+/**
+ * 특정 포트에 측정된 전력 출력
+ * @param qc {int} - QC(port) 번호. 번호는 0부터 시작한다.
+*/
+void measurePower(int qc) {
+  float power_mW = 0;
 
-  float shuntvoltage_B = 0;
-  float busvoltage_B = 0;
-  float current_mA_B = 0;
-  float loadvoltage_B = 0;
-  float power_mW_B = 0;
+  power_mW = ina219_QC[qc].getPower_mW();
 
-  shuntvoltage_A = ina219_QC1.getShuntVoltage_mV();       // 션트저항에 걸리는 전압 측정 (션트 전압으로 인해 드롭된 전압)
-  busvoltage_A = ina219_QC1.getBusVoltage_V();            // 버스전압 - 션트전압
-  current_mA_A = ina219_QC1.getCurrent_mA();              // 사용 전류
-  power_mW_A = ina219_QC1.getPower_mW();                  // 사용 전력
-  loadvoltage_A = busvoltage_A + (shuntvoltage_A / 1000); // 공급 전압
-
-  shuntvoltage_B = ina219_QC2.getShuntVoltage_mV();       // 션트저항에 걸리는 전압 측정 (션트 전압으로 인해 드롭된 전압)
-  busvoltage_B = ina219_QC2.getBusVoltage_V();            // 버스전압 - 션트전압
-  current_mA_B = ina219_QC2.getCurrent_mA();              // 사용 전류
-  power_mW_B = ina219_QC2.getPower_mW();                  // 사용 전력
-  loadvoltage_B = busvoltage_B + (shuntvoltage_B / 1000); // 공급 전압
-
-  DynamicJsonDocument powerData_A(50000);
+  DynamicJsonDocument powerData(50000);
   String jsonPowerData = "";
-  // { type: 'read', 'portId, supplier, power }
     
-  powerData_A["arduinoId"] = ARDUINO_ID;
-  powerData_A["type"] = "read";
-  powerData_A["portNum"] = 1;
-  powerData_A["power"] = power_mW_A;
+  powerData["arduinoId"] = ARDUINO_ID;
+  powerData["type"] = "read";
+  powerData["portNum"] = qc + 1;
+  powerData["power"] = power_mW;
 
-  serializeJson(powerData_A, jsonPowerData);
+  serializeJson(powerData, jsonPowerData);
 
   Serial.println(jsonPowerData);
-
-  DynamicJsonDocument powerData_B(50000);
-  String jsonPowerData2 = "";
-  // { type: 'read', 'portId, supplier, power }
-    
-  powerData_B["arduinoId"] = ARDUINO_ID;
-  powerData_B["type"] = "read";
-  powerData_B["portNum"] = 2;
-  powerData_B["power"] = power_mW_B;
-
-  serializeJson(powerData_B, jsonPowerData2);
-
-  Serial.println(jsonPowerData2);
 }
 
 /**
  * 연결된 qc와 pd를 초기화
 */
 void initializePD() {
-  for(int i = 0; i < 5; i++) {
-    switchPD(i, PD2); // PD2로 연결 초기화
+  for(int qcNum = 0; qcNum < 5; qcNum++) {
+    switchPD(qcNum, PD_2); // PD_2로 연결 초기화
   }
 }
 
 /**
  * QC와 연결된 PD를 변경해주는 함수
- * @param QC {int} - PD를 변경할 타겟 QC
- * @param PD {int} - 변경할 타겟 PD ex) PD1, PD2
+ * @param QC {int} - PD를 변경할 QC
+ * @param targetPD {int} - 변경할 타겟 PD ex) PD_1, PD_2
 */
-void switchPD(int QC, int PD) {
-  int value;
-  
-  if (PD == PD1) {
-    value = HIGH;
-  } else if (PD == PD2) {
-    value = LOW;
-  }
-
+void switchPD(int QC, int targetPD) {
   // 릴레이 제어
-  
+  switch (targetPD) {
+    case PD_1:
+      disconnectRelay(qc_relay[QC][PD_2]); // PD_2 연결 해제
+      delay(100);
+      connectRelay(qc_relay[QC][PD_1]); // PD_1 연결
+      break;
 
-  for (int i=0; i<2; i++) {
-    digitalWrite(qc_relay[QC][i], value);
+    case PD_2:
+      disconnectRelay(qc_relay[QC][PD_1]); // PD_1 연결 해제 
+      delay(100);
+      connectRelay(qc_relay[QC][PD_2]); // PD_2 연결
+      break;
+
+    default:
+      Serial.println("Switch PD Error!");
+      return;
   }
 
-  qc_pd[QC] = PD; // 현재 QC와 연결된 PD가 무엇인지 변경
+  qc_pd[QC] = targetPD; // 현재 QC와 연결된 PD가 무엇인지 변경
 }
 
 /**
@@ -174,8 +239,60 @@ void switchPD(int QC, int PD) {
  * @param {int} - 전원을 차단할 QC
 */
 void turnOffPD(int QC) {
-  digitalWrite(qc_relay[QC][0], LOW);
-  digitalWrite(qc_relay[QC][1], HIGH);
+  disconnectRelay(qc_relay[QC][PD_1]);
+  disconnectRelay(qc_relay[QC][PD_2]);
   
   qc_pd[QC] = PD_OFF; // 현재 QC와 연결된 PD는 없음
+}
+
+/**
+ * 릴레이 연결 함수
+ * @param relayNum {int} - 연결할 릴레이
+*/
+void connectRelay(int relayNum) {
+  switch (relayNum) {
+    case RY1:
+    case RY3:
+    case RY5:
+    case RY7:
+    case RY9:
+      digitalWrite(relayNum, HIGH);
+      break;
+    case RY2:
+    case RY4:
+    case RY6:
+    case RY8:
+    case RY10:
+      digitalWrite(relayNum, LOW);
+      break;
+    default:
+      Serial.println("Connect Relay Error!");
+      break;
+  }
+}
+
+/**
+ * 릴레이 연결 해제 함수
+ * @param relayNum {int} - 연결 해제할 릴레이
+*/
+void disconnectRelay(int relayNum) {
+  switch (relayNum) {
+    case RY1:
+    case RY3:
+    case RY5:
+    case RY7:
+    case RY9:
+      digitalWrite(relayNum, LOW);
+      break;
+    case RY2:
+    case RY4:
+    case RY6:
+    case RY8:
+    case RY10:
+      digitalWrite(relayNum, HIGH);
+      break;
+    default:
+      Serial.println("Disconnect Relay Error!");
+      break;
+  }
 }
