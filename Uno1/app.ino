@@ -54,7 +54,7 @@ void setup() {
   ina219_QC2.begin();
 
   // 각 릴레이 pinMode 초기화
-  for (let i = 1; i < 11; i++) {
+  for (int i = 1; i < 11; i++) {
     pinMode(relay[i], OUTPUT);
   }
 }
