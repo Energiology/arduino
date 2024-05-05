@@ -27,18 +27,20 @@
 // Power Delivery
 #define PD1 100
 #define PD2 200
+#define PD_OFF 300
 
 /**
- * Relay
  * Relay 번호 홀수는 HIGH일 시 연결, 짝수는 LOW일 시 연결
- * 즉, QC1의 공급을 PD2 -> PD1으로 바꾸고 싶다면
- * qc_relay[QC1][0] -> HIGH
- * qc_relay[QC1][1] -> HIGH
+ * qc_relay[QC][0] -> HIGH = 연결 / LOW = 해제
+ * qc_relay[QC][1] -> HIGH = 해제 / LOW = 연결
+ * 
+ * 즉, QC1의 PD를 PD2 -> PD1으로 바꾸고 싶다면
+ * qc_relay[QC1][1] -> HIGH = 해제
+ * qc_relay[QC1][0] -> HIGH = 연결
 */
-int relay[11] = {0, RY1, RY2, RY3, RY4, RY5, RY6, RY7, RY8, RY9, RY10};
 
-// qc와 연결된 릴레이, qc_relay[QC번호][0 혹은 1] = 연결된 릴레이
-int qc_relay[5][2] = {{RY1, RY2}, {RY3, RY4}, {RY5, RY6}, {RY7, RY8}, {RY9, RY10}}; 
+int relay[11] = {0, RY1, RY2, RY3, RY4, RY5, RY6, RY7, RY8, RY9, RY10};
+int qc_relay[5][2] = {{RY1, RY2}, {RY3, RY4}, {RY5, RY6}, {RY7, RY8}, {RY9, RY10}}; // qc와 연결된 릴레이, qc_relay[QC번호][0 혹은 1] = 연결된 릴레이
 
 // 현재 qc와 연결된 pd 목록, qc_pd[QC번호] = 현재 연결된 QC
 int qc_pd[5] = {PD2, PD2, PD2, PD2, PD2}; 
@@ -158,9 +160,22 @@ void switchPD(int QC, int PD) {
   }
 
   // 릴레이 제어
+  
+
   for (int i=0; i<2; i++) {
     digitalWrite(qc_relay[QC][i], value);
   }
 
   qc_pd[QC] = PD; // 현재 QC와 연결된 PD가 무엇인지 변경
+}
+
+/**
+ * 해당 QC의 연결된 전원 차단(전원 off)
+ * @param {int} - 전원을 차단할 QC
+*/
+void turnOffPD(int QC) {
+  digitalWrite(qc_relay[QC][0], LOW);
+  digitalWrite(qc_relay[QC][1], HIGH);
+  
+  qc_pd[QC] = PD_OFF; // 현재 QC와 연결된 PD는 없음
 }
